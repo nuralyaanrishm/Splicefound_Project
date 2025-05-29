@@ -30,11 +30,11 @@ from werkzeug.security import check_password_hash
 
 # === Configuration ===
 db_config = {
-    'host': 'localhost',
-    'user': 'root',
-    'password': '',
-    'database': 'image_detection_db',
-    'port': 3306,
+    'host': 'db-mysql-nyc3-17134-do-user-22909837-0.h.db.ondigitalocean.com',
+    'user': 'doadmin',
+    'password': 'AVNS_IQyG6y18Tb9cf6DAu1G',
+    'database': 'defaultdb',
+    'port': 25060,
     'auth_plugin': 'mysql_native_password'
 }
 db = mysql.connector.connect(**db_config)
