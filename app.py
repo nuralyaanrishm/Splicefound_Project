@@ -260,13 +260,14 @@ def upload_file():
         flash('No file selected')
         return redirect(url_for('home'))
 
-   if allowed_file(file.filename):
+    if allowed_file(file.filename):
         filename = datetime.now().strftime('%Y%m%d_%H%M%S_') + secure_filename(file.filename)
         path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         file.save(path)
 
         with open(path, 'rb') as f:
             img_data = f.read()
+
         result = analyze_image_internal(img_data, filename)
 
         conn = mysql.connector.connect(**db_config)
@@ -289,7 +290,8 @@ def upload_file():
                 filename,               # image_path
                 f"ela_{filename}",      # ela_path
                 f"highlighted_{filename}"  # highlighted_path
-        ))   
+        )   
+    )   
 
         conn.commit()
         detection_id = cur.lastrowid
@@ -298,7 +300,7 @@ def upload_file():
 
         return redirect(url_for('result', detection_id=detection_id))
 
-    flash('Invalid file type. Only .jpg files are allowed.')
+    flash('Invalid file type')
     return redirect(url_for('home'))
 
 
