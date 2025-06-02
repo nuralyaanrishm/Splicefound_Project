@@ -37,11 +37,14 @@ db_config = {
     'port': 25060,
     'auth_plugin': 'mysql_native_password'
 }
+
 db = mysql.connector.connect(**db_config)
 
 app = Flask(__name__, template_folder=os.path.abspath('templates'))
 app.secret_key = secrets.token_hex(16)
 CORS(app)
+
+app.config['UPLOAD_FOLDER'] = 'static/uploads'
 
 bcrypt = Bcrypt(app)
 
@@ -335,127 +338,137 @@ def history():
 @app.route('/generate_report/<int:detection_id>')
 @login_required
 def generate_report(detection_id):
-    conn = mysql.connector.connect(**db_config)
-    cur = conn.cursor(dictionary=True)
-    cur.execute('''
-        SELECT d.*, u.email FROM detections d 
-        JOIN users u ON d.user_id = u.id 
-        WHERE d.id = %s AND u.id = %s
-    ''', (detection_id, session['user_id']))
-    d = cur.fetchone()
-    cur.close()
-    conn.close()
+    try:
+        # Database fetch
+        conn = mysql.connector.connect(**db_config)
+        cur = conn.cursor(dictionary=True)
+        cur.execute('''
+            SELECT d.*, u.email FROM detections d 
+            JOIN users u ON d.user_id = u.id 
+            WHERE d.id = %s AND u.id = %s
+        ''', (detection_id, session['user_id']))
+        d = cur.fetchone()
+        cur.close()
+        conn.close()
 
-    if not d:
-        flash("Report not found")
+        if not d:
+            flash("Report not found")
+            return redirect(url_for('history'))
+
+        print("[INFO] Detection record found:", d)
+
+        # Image Paths
+        original_image_path = os.path.join(app.config['UPLOAD_FOLDER'], d['image_path'])
+        ela_image_path = os.path.join(app.config['UPLOAD_FOLDER'], f"ela_{d['image_path']}")
+        highlighted_image_path = os.path.join(app.config['UPLOAD_FOLDER'], f"highlighted_{d['image_path']}")
+
+        # Verify file existence
+        for path in [original_image_path, highlighted_image_path]:
+            if not os.path.isfile(path):
+                flash(f"Image file missing: {path}")
+                return redirect(url_for('history'))
+
+        detection_result = "Tampered" if d.get('result') == 'Tampered' else "Genuine"
+
+        # EXIF Extraction
+        camera_model = "Unspecified"
+        date_taken = "N/A"
+        file_format = "Unknown"
+        resolution = "Unknown"
+        file_size = 0
+
+        try:
+            image = Image.open(original_image_path)
+            file_format = image.format
+            resolution = f"{image.width} x {image.height} pixels"
+            file_size = os.path.getsize(original_image_path)
+
+            exif_data = image._getexif()
+            if exif_data:
+                exif = {
+                    ExifTags.TAGS.get(tag, tag): value
+                    for tag, value in exif_data.items()
+                }
+                camera_model = exif.get('Model', camera_model)
+                date_taken = exif.get('DateTimeOriginal', exif.get('DateTime', date_taken))
+        except Exception as e:
+            print("[ERROR] EXIF extraction failed:", str(e))
+
+        # PDF Generation
+        pdf = FPDF()
+        pdf.add_page()
+        pdf.set_font("Arial", "B", 16)
+        pdf.cell(0, 10, "SpliceFound: Image Splicing Detection Report", ln=True, align='C')
+        pdf.set_font("Arial", size=12)
+        pdf.cell(0, 10, f"User: {session['email']}", ln=True)
+        pdf.cell(0, 10, f"Date report generated: {datetime.now().strftime('%d/%m/%Y || %H:%M:%S')}", ln=True)
+        pdf.ln(10)
+        pdf.multi_cell(0, 10, "This report presents a comparison of original and processed images using the SpliceFound image splicing detection tool. The purpose is to demonstrate the effectiveness of the tool in identifying tampered regions in digital images.")
+        pdf.ln(10)
+
+        pdf.cell(0, 10, f"Detection Result: {detection_result}", ln=True)
+        pdf.ln(10)
+
+        # Add original image
+        try:
+            pdf.cell(0, 10, "Original Image:", ln=True)
+            pdf.image(original_image_path, w=100)
+            pdf.ln(10)
+        except Exception as e:
+            print("[ERROR] Could not add original image:", str(e))
+
+        # Add highlighted image
+        try:
+            pdf.cell(0, 10, "Result Image (Tampered Areas Highlighted):", ln=True)
+            pdf.image(highlighted_image_path, w=100)
+            pdf.ln(10)
+        except Exception as e:
+            print("[ERROR] Could not add highlighted image:", str(e))
+
+        # Metadata
+        pdf.cell(0, 10, "METADATA:", ln=True)
+        pdf.cell(0, 10, f"File name: {d['image_path']}", ln=True)
+        pdf.cell(0, 10, f"Camera model: {camera_model}", ln=True)
+        pdf.cell(0, 10, f"Date taken: {date_taken}", ln=True)
+        pdf.cell(0, 10, f"File format: {file_format}", ln=True)
+        pdf.cell(0, 10, f"File size: {file_size} bytes", ln=True)
+        pdf.cell(0, 10, f"Image resolution: {resolution}", ln=True)
+        pdf.ln(10)
+
+        pdf.cell(0, 10, "Additional Information", ln=True)
+        pdf.cell(0, 10, "Detection Technique: Error Level Analysis (ELA)", ln=True)
+        pdf.cell(0, 10, "Tamper Highlighting Method: Colorized Overlay", ln=True)
+        pdf.cell(0, 10, "Tool Version: SpliceFound v1.0", ln=True)
+        pdf.ln(10)
+
+        pdf.cell(0, 10, "DISCLAIMER", ln=True)
+        pdf.cell(0, 10, "Image resolution affects the accuracy of result.", ln=True)
+        pdf.cell(0, 10, "Using high resolution image may result in better detection accuracy.", ln=True)
+
+        pdf.set_font("Arial", "B", 12)
+        pdf.cell(0, 10, "ELA Weaknesses", ln=True)
+        pdf.set_font("Arial", size=12)
+        pdf.multi_cell(0, 10, 
+            "• ELA is sensitive to image compression: Highly compressed images (e.g., low-quality JPEGs).\n"
+            "• It can produce misleading or noisy results, making tampering detection unreliable.\n"
+            "• Limited effectiveness on certain image formats: ELA works best on JPEG images and is less effective or unusable on formats without lossy compression like PNG or BMP.\n"
+            "• False positives are possible: Natural image features or editing steps (e.g., resizing, contrast adjustments) can cause false tamper indications.\n"
+            "• Dependent on original image quality: Low-resolution or heavily edited images may reduce ELA accuracy.\n"
+            "• Does not locate all types of tampering: ELA is primarily designed to detect splicing and some retouching but cannot identify all forgery types (e.g., metadata manipulation or subtle pixel-level edits)."
+        )
+        pdf.ln(10)
+
+        # Send PDF as a file
+        buf = BytesIO()
+        buf.write(pdf.output(dest='S').encode('latin1'))
+        buf.seek(0)
+
+        return send_file(buf, as_attachment=True, download_name=f"report_{detection_id}.pdf")
+    
+    except Exception as e:
+        print("[ERROR] Report generation failed:", str(e))
+        flash("An error occurred while generating the report.")
         return redirect(url_for('history'))
-
-    # Image Paths
-    original_image_path = os.path.join(app.config['UPLOAD_FOLDER'], d['image_path'])
-    ela_image_path = os.path.join(app.config['UPLOAD_FOLDER'], f"ela_{d['image_path']}")
-    highlighted_image_path = os.path.join(app.config['UPLOAD_FOLDER'], f"highlighted_{d['image_path']}")
-
-    # Detection Result (e.g., Tampered or Not)
-    detection_result = "Tampered" if d.get('result') == 'Tampered' else "Genuine"
-
-    # --- Insert EXIF extraction code here ---
-    image = Image.open(original_image_path)
-
-    camera_model = "Unspecified"
-    date_taken = "N/A"
-    file_format = image.format
-    resolution = f"{image.width} x {image.height} pixels"  # Image resolution
-
-    exif = {}  # Initialize
-
-    exif_data = image._getexif()
-    if exif_data:
-        exif = {
-            ExifTags.TAGS.get(tag): value
-            for tag, value in exif_data.items()
-            if tag in ExifTags.TAGS
-        }
-        camera_model = exif.get('Model', camera_model)
-        date_taken = exif.get('DateTimeOriginal', exif.get('DateTime', date_taken))
-
-    file_size = os.path.getsize(original_image_path)
-
-    # --- End EXIF extraction ---
-
-    # Create PDF document
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font("Arial", "B", 16)
-    pdf.cell(0, 10, "SpliceFound: Image Splicing Detection Report", ln=True, align='C')
-    pdf.set_font("Arial", size=12)
-
-    # Add dynamic data into the report
-    pdf.cell(0, 10, f"User: {session['email']}", ln=True)
-    pdf.cell(0, 10, f"Date report generated: {datetime.now().strftime('%d/%m/%Y || %H:%M:%S')}", ln=True)
-    pdf.ln(10)
-    pdf.multi_cell(0, 10, "This report presents a comparison of original and processed images using the SpliceFound image splicing detection tool. The purpose is to demonstrate the effectiveness of the tool in identifying tampered regions in digital images.")
-    pdf.ln(10)
-
-    # Add detection result
-    pdf.cell(0, 10, f"Detection Result: {detection_result}", ln=True)
-    pdf.ln(10)
-
-    # Add original image
-    pdf.cell(0, 10, "Original Image:", ln=True)
-    pdf.image(original_image_path, w=100)  # Adjust image size as needed
-    pdf.ln(10)
-
-    # Add original with white traces
-    pdf.cell(0, 10, "Result Image (Tampered Areas Highlighted):", ln=True)
-    pdf.image(highlighted_image_path, w=100)  # Adjust the size as needed
-    pdf.ln(10)
-
-    # Add metadata
-    pdf.cell(0, 10, "METADATA:", ln=True)
-    pdf.cell(0, 10, f"File name: {d['image_path']}", ln=True)
-    pdf.cell(0, 10, f"Camera model: {camera_model}", ln=True)
-    pdf.cell(0, 10, f"Date taken: {date_taken}", ln=True)
-    pdf.cell(0, 10, f"File format: {file_format}", ln=True)
-    pdf.cell(0, 10, f"File size: {file_size} bytes", ln=True)
-    pdf.cell(0, 10, f"Image resolution: {resolution}", ln=True)  # New line added here
-    pdf.ln(10)
-
-    # Additional Information
-    pdf.cell(0, 10, "Additional Information", ln=True)
-    pdf.cell(0, 10, "Detection Technique: Error Level Analysis (ELA)", ln=True)
-    pdf.cell(0, 10, "Tamper Highlighting Method: Colorized Overlay", ln=True)
-    pdf.cell(0, 10, "Tool Version: SpliceFound v1.0", ln=True)
-    pdf.ln(10)
-
-    # Disclaimer
-    pdf.cell(0, 10, "DISCLAIMER", ln=True)
-    pdf.cell(0, 10, "Image resolution affects the accuracy of result.", ln=True)
-    pdf.cell(0, 10, "Using high resolution image may result in better detection accuracy.", ln=True)
-
-    # ELA Weaknesses Disclaimer
-    pdf.set_font("Arial", "B", 12)
-    pdf.cell(0, 10, "ELA Weaknesses", ln=True)
-    pdf.set_font("Arial", size=12)
-    pdf.multi_cell(0, 10, 
-        "• ELA is sensitive to image compression: Highly compressed images (e.g., low-quality JPEGs) "
-        "• It can produce misleading or noisy results, making tampering detection unreliable.\n\n"
-        "• Limited effectiveness on certain image formats: ELA works best on JPEG images and is less "
-        "effective or unusable on formats without lossy compression like PNG or BMP.\n\n"
-        "• False positives are possible: Natural image features or editing steps (e.g., resizing, contrast "
-        "adjustments) can cause false tamper indications.\n\n"
-        "• Dependent on original image quality: Low-resolution or heavily edited images may reduce ELA accuracy.\n\n"
-        "• Does not locate all types of tampering: ELA is primarily designed to detect splicing and some "
-        "retouching but cannot identify all forgery types (e.g., metadata manipulation or subtle pixel-level edits)."
-    )
-    pdf.ln(10)
-
-    # Save PDF to a buffer
-    buf = BytesIO()
-    buf.write(pdf.output(dest='S').encode('latin1'))
-    buf.seek(0)
-
-    # Return the generated PDF as an attachment
-    return send_file(buf, as_attachment=True, download_name=f"report_{detection_id}.pdf")
 
 
 # === Image Analysis Functions ===
