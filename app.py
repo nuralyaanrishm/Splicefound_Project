@@ -459,10 +459,14 @@ def generate_report(detection_id):
 
 
 # === Image Analysis Functions ===
-def perform_ela(image_path, quality=85):
+def perform_ela(image_path, quality=95):
     original = Image.open(image_path).convert("RGB")
+    # Rescale input image to max 800x800 before ELA
+    max_size = 800
+    original.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
+
     buffer = io.BytesIO()
-    original.save(buffer, "JPEG", quality=quality)
+    original.save(buffer, "JPEG", quality=quality)  # Normalize JPEG quality to 95%
     buffer.seek(0)
     compressed = Image.open(buffer)
 
@@ -502,6 +506,12 @@ def analyze_image_internal(img_data, filename):
     path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
     with open(path, 'wb') as f:
         f.write(img_data)
+
+    # Open saved image, rescale and normalize JPEG quality to 95%
+    image = Image.open(path).convert("RGB")
+    max_size = 800
+    image.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
+    image.save(path, "JPEG", quality=95)
 
     original, ela_color = perform_ela(path)
     tamper_mask = create_tamper_mask(ela_color)
