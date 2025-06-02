@@ -442,14 +442,14 @@ def generate_report(detection_id):
     pdf.cell(0, 10, "DISCLAIMER", ln=True)
     pdf.cell(0, 10, "Image resolution affects the accuracy of result.", ln=True)
     pdf.cell(0, 10, "Using high resolution image may result in better detection accuracy.", ln=True)
+    pdf.ln(10)
 
     # Disclaimer
     pdf.cell(0, 10, "ELA Weaknesses", ln=True)
     pdf.cell(0, 10, "False positives are possible: Natural image features or editing steps", ln=True)
     pdf.cell(0, 10, "(e.g., resizing, contrast adjustments) can cause false tamper indications.", ln=True)
     pdf.cell(0, 10, "Dependent on original image quality: Low-resolution or heavily edited images may reduce ELA accuracy.", ln=True)
-    pdf.cell(0, 10, "Does not locate all types of tampering: ELA is primarily designed to detect splicing and some retouching but cannot identify all forgery types", ln=True)
-    
+    pdf.cell(0, 10, "ELA is primarily designed to detect splicing but cannot identify all forgery types", ln=True)
     
     
     # Save PDF to a buffer
