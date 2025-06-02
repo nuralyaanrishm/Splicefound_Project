@@ -260,14 +260,13 @@ def upload_file():
         flash('No file selected')
         return redirect(url_for('home'))
 
-    if file and file.filename.lower().endswith('.jpg', '.jpeg'):
+   if allowed_file(file.filename):
         filename = datetime.now().strftime('%Y%m%d_%H%M%S_') + secure_filename(file.filename)
         path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         file.save(path)
 
         with open(path, 'rb') as f:
             img_data = f.read()
-
         result = analyze_image_internal(img_data, filename)
 
         conn = mysql.connector.connect(**db_config)
