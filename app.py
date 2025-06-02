@@ -257,7 +257,7 @@ def upload_file():
         flash('No file selected')
         return redirect(url_for('home'))
 
-    if allowed_file(file.filename):
+    if file and file.filename.lower().endswith('.jpg'):
         filename = datetime.now().strftime('%Y%m%d_%H%M%S_') + secure_filename(file.filename)
         path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         file.save(path)
@@ -287,8 +287,7 @@ def upload_file():
                 filename,               # image_path
                 f"ela_{filename}",      # ela_path
                 f"highlighted_{filename}"  # highlighted_path
-        )   
-    )   
+        ))   
 
         conn.commit()
         detection_id = cur.lastrowid
@@ -297,8 +296,9 @@ def upload_file():
 
         return redirect(url_for('result', detection_id=detection_id))
 
-    flash('Invalid file type')
+    flash('Invalid file type. Only .jpg files are allowed.')
     return redirect(url_for('home'))
+
 
 @app.route('/result/<int:detection_id>')
 @login_required
