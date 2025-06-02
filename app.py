@@ -382,6 +382,13 @@ def generate_report(detection_id):
 
     file_size = os.path.getsize(original_image_path)
 
+
+    # Open the image file to get its resolution
+    image_path = os.path.join(app.config['UPLOAD_FOLDER'], d['image_path'])
+    with Image.open(image_path) as img:
+        image_width, image_height = img.size
+        image_resolution = f"{image_width} x {image_height} pixels"
+
     # --- End EXIF extraction ---
     
     # Create PDF document
@@ -420,6 +427,7 @@ def generate_report(detection_id):
     pdf.cell(0, 10, f"Date taken: {date_taken}", ln=True)
     pdf.cell(0, 10, f"File format: {file_format}", ln=True)
     pdf.cell(0, 10, f"File size: {file_size} bytes", ln=True)
+    pdf.cell(0, 10, f"Image resolution: {image_resolution}", ln=True)
     pdf.ln(10)
 
 
@@ -434,6 +442,15 @@ def generate_report(detection_id):
     pdf.cell(0, 10, "DISCLAIMER", ln=True)
     pdf.cell(0, 10, "Image resolution affects the accuracy of result.", ln=True)
     pdf.cell(0, 10, "Using high resolution image may result in better detection accuracy.", ln=True)
+
+    # Disclaimer
+    pdf.cell(0, 10, "ELA Weaknesses", ln=True)
+    pdf.cell(0, 10, "False positives are possible: Natural image features or editing steps", ln=True)
+    pdf.cell(0, 10, "(e.g., resizing, contrast adjustments) can cause false tamper indications.", ln=True)
+    pdf.cell(0, 10, "Dependent on original image quality: Low-resolution or heavily edited images may reduce ELA accuracy.", ln=True)
+    pdf.cell(0, 10, "Does not locate all types of tampering: ELA is primarily designed to detect splicing and some retouching but cannot identify all forgery types", ln=True)
+    
+    
     
     # Save PDF to a buffer
     buf = BytesIO()
