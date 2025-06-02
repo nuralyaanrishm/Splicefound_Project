@@ -435,22 +435,6 @@ def generate_report(detection_id):
     pdf.cell(0, 10, "Image resolution affects the accuracy of result.", ln=True)
     pdf.cell(0, 10, "Using high resolution image may result in better detection accuracy.", ln=True)
 
-    # ELA Weaknesses Disclaimer
-    pdf.set_font("Arial", "B", 12)
-    pdf.cell(0, 10, "ELA Weaknesses", ln=True)
-    pdf.set_font("Arial", size=12)
-    pdf.multi_cell(0, 10, 
-        "• ELA is sensitive to image compression: Highly compressed images (e.g., low-quality JPEGs) "
-        "• It can produce misleading or noisy results, making tampering detection unreliable.\n\n"
-        "• Limited effectiveness on certain image formats: ELA works best on JPEG images and is less "
-        "effective or unusable on formats without lossy compression like PNG or BMP.\n\n"
-        "• False positives are possible: Natural image features or editing steps (e.g., resizing, contrast "
-        "adjustments) can cause false tamper indications.\n\n"
-        "• Dependent on original image quality: Low-resolution or heavily edited images may reduce ELA accuracy.\n\n"
-        "• Does not locate all types of tampering: ELA is primarily designed to detect splicing and some "
-        "retouching but cannot identify all forgery types (e.g., metadata manipulation or subtle pixel-level edits)."
-    )
-    pdf.ln(10)
 
     # Save PDF to a buffer
     buf = BytesIO()
