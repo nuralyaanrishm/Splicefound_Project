@@ -30,21 +30,18 @@ from werkzeug.security import check_password_hash
 
 # === Configuration ===
 db_config = {
-    'host': 'db-mysql-nyc3-17134-do-user-22909837-0.h.db.ondigitalocean.com',
-    'user': 'doadmin',
-    'password': 'AVNS_IQyG6y18Tb9cf6DAu1G',
-    'database': 'defaultdb',
-    'port': 25060,
+    'host': 'localhost',
+    'user': 'root',
+    'password': '',
+    'database': 'image_detection_db',
+    'port': 3306,
     'auth_plugin': 'mysql_native_password'
 }
-
 db = mysql.connector.connect(**db_config)
 
 app = Flask(__name__, template_folder=os.path.abspath('templates'))
 app.secret_key = secrets.token_hex(16)
 CORS(app)
-
-app.config['UPLOAD_FOLDER'] = 'static/uploads'
 
 bcrypt = Bcrypt(app)
 
@@ -260,7 +257,7 @@ def upload_file():
         flash('No file selected')
         return redirect(url_for('home'))
 
-    if file and file.filename.lower().endswith('.jpg', '.jepg'):
+    if allowed_file(file.filename):
         filename = datetime.now().strftime('%Y%m%d_%H%M%S_') + secure_filename(file.filename)
         path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         file.save(path)
@@ -290,7 +287,8 @@ def upload_file():
                 filename,               # image_path
                 f"ela_{filename}",      # ela_path
                 f"highlighted_{filename}"  # highlighted_path
-        ))   
+        )   
+    )   
 
         conn.commit()
         detection_id = cur.lastrowid
@@ -299,9 +297,8 @@ def upload_file():
 
         return redirect(url_for('result', detection_id=detection_id))
 
-    flash('Invalid file type. Only .jpg files are allowed.')
+    flash('Invalid file type')
     return redirect(url_for('home'))
-
 
 @app.route('/result/<int:detection_id>')
 @login_required
@@ -443,17 +440,11 @@ def generate_report(detection_id):
     # Return the generated PDF as an attachment
     return send_file(buf, as_attachment=True, download_name=f"report_{detection_id}.pdf")
 
-
-
 # === Image Analysis Functions ===
-def perform_ela(image_path, quality=95):
+def perform_ela(image_path, quality=85):
     original = Image.open(image_path).convert("RGB")
-    # Rescale input image to max 800x800 before ELA
-    max_size = 800
-    original.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
-
     buffer = io.BytesIO()
-    original.save(buffer, "JPEG", quality=quality)  # Normalize JPEG quality to 95%
+    original.save(buffer, "JPEG", quality=quality)
     buffer.seek(0)
     compressed = Image.open(buffer)
 
@@ -493,12 +484,6 @@ def analyze_image_internal(img_data, filename):
     path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
     with open(path, 'wb') as f:
         f.write(img_data)
-
-    # Open saved image, rescale and normalize JPEG quality to 95%
-    image = Image.open(path).convert("RGB")
-    max_size = 800
-    image.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
-    image.save(path, "JPEG", quality=95)
 
     original, ela_color = perform_ela(path)
     tamper_mask = create_tamper_mask(ela_color)
@@ -541,5 +526,4 @@ def admin():
 if __name__ == '__main__':
     if not os.path.exists(UPLOAD_FOLDER):
         os.makedirs(UPLOAD_FOLDER)
-    #app.run(debug=True)
-    app.run(host='0.0.0.0', port=8080)
+    app.run(debug=True)
