@@ -303,7 +303,6 @@ def upload_file():
     flash('Invalid file type')
     return redirect(url_for('home'))
 
-
 @app.route('/result/<int:detection_id>')
 @login_required
 def result(detection_id):
@@ -339,133 +338,116 @@ def history():
 @app.route('/generate_report/<int:detection_id>')
 @login_required
 def generate_report(detection_id):
-    try:
-        conn = mysql.connector.connect(**db_config)
-        cur = conn.cursor(dictionary=True)
-        cur.execute('''
-            SELECT d.*, u.email FROM detections d 
-            JOIN users u ON d.user_id = u.id 
-            WHERE d.id = %s AND u.id = %s
-        ''', (detection_id, session['user_id']))
-        d = cur.fetchone()
-        cur.close()
-        conn.close()
+    conn = mysql.connector.connect(**db_config)
+    cur = conn.cursor(dictionary=True)
+    cur.execute('''
+        SELECT d.*, u.email FROM detections d 
+        JOIN users u ON d.user_id = u.id 
+        WHERE d.id = %s AND u.id = %s
+    ''', (detection_id, session['user_id']))
+    d = cur.fetchone()
+    cur.close()
+    conn.close()
 
-        if not d:
-            flash("Report not found")
-            return redirect(url_for('history'))
-
-        # Image Paths
-        original_image_path = os.path.join(app.config['UPLOAD_FOLDER'], d['image_path'])
-        ela_image_path = os.path.join(app.config['UPLOAD_FOLDER'], f"ela_{d['image_path']}")
-        highlighted_image_path = os.path.join(app.config['UPLOAD_FOLDER'], f"highlighted_{d['image_path']}")
-
-        # Check if required image files exist
-        if not os.path.exists(original_image_path):
-            flash("Original image not found.")
-            return redirect(url_for('history'))
-
-        if not os.path.exists(highlighted_image_path):
-            flash("Highlighted image not found.")
-            return redirect(url_for('history'))
-
-        # Detection Result (e.g., Tampered or Not)
-        detection_result = "Tampered" if d.get('result') == 'Tampered' else "Genuine"
-
-        # EXIF extraction
-        image = Image.open(original_image_path)
-        camera_model = "Unspecified"
-        date_taken = "N/A"
-        file_format = image.format
-        resolution = f"{image.width} x {image.height} pixels"
-
-        exif = {}
-        exif_data = image._getexif()
-        if exif_data:
-            exif = {
-                ExifTags.TAGS.get(tag): value
-                for tag, value in exif_data.items()
-                if tag in ExifTags.TAGS
-            }
-            camera_model = exif.get('Model', camera_model)
-            date_taken = exif.get('DateTimeOriginal', exif.get('DateTime', date_taken))
-
-        file_size = os.path.getsize(original_image_path)
-
-        # Create PDF document
-        pdf = FPDF()
-        pdf.add_page()
-        pdf.set_font("Arial", "B", 16)
-        pdf.cell(0, 10, "SpliceFound: Image Splicing Detection Report", ln=True, align='C')
-        pdf.set_font("Arial", size=12)
-
-        # Add dynamic data into the report
-        pdf.cell(0, 10, f"User: {session.get('email', 'Unknown')}", ln=True)
-        pdf.cell(0, 10, f"Date report generated: {datetime.now().strftime('%d/%m/%Y || %H:%M:%S')}", ln=True)
-        pdf.ln(10)
-        pdf.multi_cell(0, 10, "This report presents a comparison of original and processed images using the SpliceFound image splicing detection tool. The purpose is to demonstrate the effectiveness of the tool in identifying tampered regions in digital images.")
-        pdf.ln(10)
-
-        # Add detection result
-        pdf.cell(0, 10, f"Detection Result: {detection_result}", ln=True)
-        pdf.ln(10)
-
-        # Add original image
-        pdf.cell(0, 10, "Original Image:", ln=True)
-        pdf.image(original_image_path, w=100)
-        pdf.ln(10)
-
-        # Add tamper-highlighted image
-        pdf.cell(0, 10, "Result Image (Tampered Areas Highlighted):", ln=True)
-        pdf.image(highlighted_image_path, w=100)
-        pdf.ln(10)
-
-        # Add metadata
-        pdf.cell(0, 10, "METADATA:", ln=True)
-        pdf.cell(0, 10, f"File name: {d['image_path']}", ln=True)
-        pdf.cell(0, 10, f"Camera model: {camera_model}", ln=True)
-        pdf.cell(0, 10, f"Date taken: {date_taken}", ln=True)
-        pdf.cell(0, 10, f"File format: {file_format}", ln=True)
-        pdf.cell(0, 10, f"File size: {file_size} bytes", ln=True)
-        pdf.cell(0, 10, f"Image resolution: {resolution}", ln=True)
-        pdf.ln(10)
-
-        # Additional Information
-        pdf.cell(0, 10, "Additional Information", ln=True)
-        pdf.cell(0, 10, "Detection Technique: Error Level Analysis (ELA)", ln=True)
-        pdf.cell(0, 10, "Tamper Highlighting Method: Colorized Overlay", ln=True)
-        pdf.cell(0, 10, "Tool Version: SpliceFound v1.0", ln=True)
-        pdf.ln(10)
-
-        # Disclaimer
-        pdf.cell(0, 10, "DISCLAIMER", ln=True)
-        pdf.cell(0, 10, "Image resolution affects the accuracy of result.", ln=True)
-        pdf.cell(0, 10, "Using high resolution image may result in better detection accuracy.", ln=True)
-
-        # Save PDF to a buffer
-        buf = BytesIO()
-        buf.write(pdf.output(dest='S').encode('latin1'))
-        buf.seek(0)
-
-        # Return the generated PDF as an attachment
-        return send_file(buf, as_attachment=True, download_name=f"report_{detection_id}.pdf")
-
-    except Exception as e:
-        current_app.logger.error(f"Error generating report: {e}")
-        current_app.logger.error(traceback.format_exc())
-        flash("An error occurred while generating the report.")
+    if not d:
+        flash("Report not found")
         return redirect(url_for('history'))
 
+    # Image Paths
+    original_image_path = os.path.join(app.config['UPLOAD_FOLDER'], d['image_path'])
+    ela_image_path = os.path.join(app.config['UPLOAD_FOLDER'], f"ela_{d['image_path']}")
+    highlighted_image_path = os.path.join(app.config['UPLOAD_FOLDER'], f"highlighted_{d['image_path']}")
+
+    # Detection Result (e.g., Tampered or Not)
+    detection_result = "Tampered" if d.get('result') == 'Tampered' else "Genuine"
+
+    # --- Insert EXIF extraction code here ---
+    image = Image.open(original_image_path)
+
+    camera_model = "Unspecified"
+    date_taken = "N/A"
+    file_format = image.format
+
+    exif = {}  # Initialize
+
+    exif_data = image._getexif()
+    if exif_data:
+        exif = {
+            ExifTags.TAGS.get(tag): value
+            for tag, value in exif_data.items()
+            if tag in ExifTags.TAGS
+        }
+        camera_model = exif.get('Model', camera_model)
+        date_taken = exif.get('DateTimeOriginal', exif.get('DateTime', date_taken))
+
+    file_size = os.path.getsize(original_image_path)
+
+    # --- End EXIF extraction ---
+    
+    # Create PDF document
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", "B", 16)
+    pdf.cell(0, 10, "SpliceFound: Image Splicing Detection Report", ln=True, align='C')
+    pdf.set_font("Arial", size=12)
+    
+    # Add dynamic data into the report
+    pdf.cell(0, 10, f"User: {session['email']}", ln=True)
+    pdf.cell(0, 10, f"Date report generated: {datetime.now().strftime('%d/%m/%Y || %H:%M:%S')}", ln=True)
+    pdf.ln(10)
+    pdf.multi_cell(0, 10, "This report presents a comparison of original and processed images using the SpliceFound image splicing detection tool. The purpose is to demonstrate the effectiveness of the tool in identifying tampered regions in digital images.")
+    pdf.ln(10)
+
+    # Add detection result
+    pdf.cell(0, 10, f"Detection Result: {detection_result}", ln=True)
+    pdf.ln(10)
+
+    # Add original image
+    pdf.cell(0, 10, "Original Image:", ln=True)
+    pdf.image(original_image_path, w=100)  # Adjust image size as needed
+    pdf.ln(10)
+
+
+    # Add original with white traces
+    pdf.cell(0, 10, "Result Image (Tampered Areas Highlighted):", ln=True)
+    pdf.image(highlighted_image_path, w=100)  # Adjust the size as needed
+    pdf.ln(10)
+
+    # Add metadata
+    pdf.cell(0, 10, "METADATA:", ln=True)
+    pdf.cell(0, 10, f"File name: {d['image_path']}", ln=True)
+    pdf.cell(0, 10, f"Camera model: {camera_model}", ln=True)
+    pdf.cell(0, 10, f"Date taken: {date_taken}", ln=True)
+    pdf.cell(0, 10, f"File format: {file_format}", ln=True)
+    pdf.cell(0, 10, f"File size: {file_size} bytes", ln=True)
+    pdf.ln(10)
+
+
+    # Additional Information
+    pdf.cell(0, 10, "Additional Information", ln=True)
+    pdf.cell(0, 10, "Detection Technique: Error Level Analysis (ELA)", ln=True)
+    pdf.cell(0, 10, "Tamper Highlighting Method: Colorized Overlay", ln=True)
+    pdf.cell(0, 10, "Tool Version: SpliceFound v1.0", ln=True)
+    pdf.ln(10)
+    
+    # Disclaimer
+    pdf.cell(0, 10, "DISCLAIMER", ln=True)
+    pdf.cell(0, 10, "Image resolution affects the accuracy of result.", ln=True)
+    pdf.cell(0, 10, "Using high resolution image may result in better detection accuracy.", ln=True)
+    
+    # Save PDF to a buffer
+    buf = BytesIO()
+    buf.write(pdf.output(dest='S').encode('latin1'))
+    buf.seek(0)
+
+    # Return the generated PDF as an attachment
+    return send_file(buf, as_attachment=True, download_name=f"report_{detection_id}.pdf")
 
 # === Image Analysis Functions ===
-def perform_ela(image_path, quality=95):
+def perform_ela(image_path, quality=85):
     original = Image.open(image_path).convert("RGB")
-    # Rescale input image to max 800x800 before ELA
-    max_size = 800
-    original.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
-
     buffer = io.BytesIO()
-    original.save(buffer, "JPEG", quality=quality)  # Normalize JPEG quality to 95%
+    original.save(buffer, "JPEG", quality=quality)
     buffer.seek(0)
     compressed = Image.open(buffer)
 
@@ -506,12 +488,6 @@ def analyze_image_internal(img_data, filename):
     with open(path, 'wb') as f:
         f.write(img_data)
 
-    # Open saved image, rescale and normalize JPEG quality to 95%
-    image = Image.open(path).convert("RGB")
-    max_size = 800
-    image.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
-    image.save(path, "JPEG", quality=95)
-
     original, ela_color = perform_ela(path)
     tamper_mask = create_tamper_mask(ela_color)
     highlighted = overlay_mask_on_original(original, tamper_mask)
@@ -531,6 +507,7 @@ def analyze_image_internal(img_data, filename):
         'result': result,
         'tamper_ratio': ratio
     }
+    
     
 @app.route('/admin')
 def admin():
