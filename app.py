@@ -364,6 +364,7 @@ def generate_report(detection_id):
     camera_model = "Unspecified"
     date_taken = "N/A"
     file_format = image.format
+    resolution = f"{image.width} x {image.height} pixels"  # Image resolution
 
     exif = {}  # Initialize
 
@@ -380,14 +381,14 @@ def generate_report(detection_id):
     file_size = os.path.getsize(original_image_path)
 
     # --- End EXIF extraction ---
-    
+
     # Create PDF document
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", "B", 16)
     pdf.cell(0, 10, "SpliceFound: Image Splicing Detection Report", ln=True, align='C')
     pdf.set_font("Arial", size=12)
-    
+
     # Add dynamic data into the report
     pdf.cell(0, 10, f"User: {session['email']}", ln=True)
     pdf.cell(0, 10, f"Date report generated: {datetime.now().strftime('%d/%m/%Y || %H:%M:%S')}", ln=True)
@@ -404,7 +405,6 @@ def generate_report(detection_id):
     pdf.image(original_image_path, w=100)  # Adjust image size as needed
     pdf.ln(10)
 
-
     # Add original with white traces
     pdf.cell(0, 10, "Result Image (Tampered Areas Highlighted):", ln=True)
     pdf.image(highlighted_image_path, w=100)  # Adjust the size as needed
@@ -417,8 +417,8 @@ def generate_report(detection_id):
     pdf.cell(0, 10, f"Date taken: {date_taken}", ln=True)
     pdf.cell(0, 10, f"File format: {file_format}", ln=True)
     pdf.cell(0, 10, f"File size: {file_size} bytes", ln=True)
+    pdf.cell(0, 10, f"Image resolution: {resolution}", ln=True)  # New line added here
     pdf.ln(10)
-
 
     # Additional Information
     pdf.cell(0, 10, "Additional Information", ln=True)
@@ -426,12 +426,12 @@ def generate_report(detection_id):
     pdf.cell(0, 10, "Tamper Highlighting Method: Colorized Overlay", ln=True)
     pdf.cell(0, 10, "Tool Version: SpliceFound v1.0", ln=True)
     pdf.ln(10)
-    
+
     # Disclaimer
     pdf.cell(0, 10, "DISCLAIMER", ln=True)
     pdf.cell(0, 10, "Image resolution affects the accuracy of result.", ln=True)
     pdf.cell(0, 10, "Using high resolution image may result in better detection accuracy.", ln=True)
-    
+
     # Save PDF to a buffer
     buf = BytesIO()
     buf.write(pdf.output(dest='S').encode('latin1'))
@@ -439,6 +439,7 @@ def generate_report(detection_id):
 
     # Return the generated PDF as an attachment
     return send_file(buf, as_attachment=True, download_name=f"report_{detection_id}.pdf")
+
 
 # === Image Analysis Functions ===
 def perform_ela(image_path, quality=85):
