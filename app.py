@@ -177,7 +177,7 @@ def is_valid_password(password):
         return False
     if not re.search(r'\d', password):
         return False
-    if not re.search(r'[!@#$%^&*(),.?":{}|<>]', password):
+    if not re.search(r'[!@#$%^&*()_,.?":{}|<>]', password):
         return False
     return True
 
